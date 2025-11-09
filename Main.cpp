@@ -110,6 +110,7 @@ public:
 struct Player
 {
 	int score{};
+	int aces{};
 };
 
 namespace Setting
@@ -118,10 +119,27 @@ namespace Setting
 	const int dealerStop{ 17 };
 }
 
+void aceMechanics(Player& somePlayer, Deck& deck)
+{
+	if (somePlayer.score >= Setting::playerBust)
+	{
+		while (somePlayer.score > Setting::playerBust && somePlayer.aces > 0)
+		{
+			somePlayer.score -= 10;
+			--somePlayer.aces;
+		}
+	}
+}
+
 auto playerTurn(Player& player, Deck& deck)
 {
-	while (player.score < Setting::playerBust)
+	while (true)
 	{
+		aceMechanics(player, deck);
+
+		if (player.score > Setting::playerBust)
+			return false;
+
 		std::cout << "(h) to hit, or (s) to stand: ";
 		char choice{};
 		std::cin >> choice;
@@ -137,6 +155,10 @@ auto playerTurn(Player& player, Deck& deck)
 		if (choice == 'h')
 		{
 			Card card{ deck.dealCard() };
+
+			if (card.rank == Card::Rank::ace)
+				++player.aces;
+
 			std::cout << "You were dealt " << Card::rankName[card.rank] << Card::suitName[card.suit]
 				<< ". ";
 			player.score += card.value();
@@ -145,57 +167,88 @@ auto playerTurn(Player& player, Deck& deck)
 		else
 			break;
 	}
+
 	return player.score <= Setting::playerBust;
 }
 
-bool play(Player& dealer, Player& player, Deck& deck)
+int play(Player& dealer, Player& player, Deck& deck)
 {
-	deck.shuffle();
-	dealer.score += deck.dealCard().value();
+	Card card = deck.dealCard();
+	dealer.score += card.value();
 
-	player.score += deck.dealCard().value();
-	player.score += deck.dealCard().value();
+	if (card.rank == Card::Rank::ace)
+		++dealer.aces;
 
-	std::cout << "The dealer is showing: " << dealer.score << '\n';
-	std::cout << "You have score: " << player.score << '\n';
+	std::cout << "The dealer is showing: "
+		<< Card::rankName[card.rank] << Card::suitName[card.suit] 
+		<< " (" << dealer.score << ")" << '\n';
 
+
+	std::cout << "You are showing ";
+
+	card = deck.dealCard();
+	player.score += card.value();
+	std::cout << Card::rankName[card.rank] << Card::suitName[card.suit] << " ";
+
+	card = deck.dealCard();
+	player.score += card.value();
+	std::cout << Card::rankName[card.rank] << Card::suitName[card.suit] 
+		<< " (" << player.score << ")\n";
+
+	
 	if (!playerTurn(player, deck))
 	{
 		std::cout << "You went bust!\n";
-		return false;
+		return -1;
 	}
 
 	while (dealer.score < Setting::dealerStop)
 	{
+		aceMechanics(dealer, deck);
+
 		Card card{ deck.dealCard() };
 		dealer.score += card.value();
+
+		if (card.rank == Card::Rank::ace)
+			++dealer.aces;
+
 		std::cout << "The dealer flips a "
 			<< Card::rankName[card.rank] << Card::suitName[card.suit] << ".\t"
 			<< "They now have: " << dealer.score << '\n';
 	}
 
+	aceMechanics(dealer, deck);
+
 	if (dealer.score > Setting::playerBust)
 	{
 		std::cout << "The dealer went bust!\n";
-		return true;
+		return 1;
 	}
 
-	return player.score > dealer.score;
+	if (player.score < dealer.score)
+		return -1;
+	if (player.score > dealer.score)
+		return 1;
+
+	return 0;
 }
 
 int main()
 {
 	Deck deck{};
+	deck.shuffle();
 
 	Player dealer{};
 	Player player{};
 
-	bool win = play(dealer, player, deck);
+	int win = play(dealer, player, deck);
 
-	if (win)
+	if (win == 1)
 		std::cout << "You win!\n";
-	else
+	else if (win == -1)
 		std::cout << "You lose!\n";
+	else
+		std::cout << "It's a tie...";
 
 	return 0;
 }
